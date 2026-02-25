@@ -1,0 +1,10 @@
+[tools]
+"github:lucasew/workspaced" = "0.1.5"
+
+[tasks]
+install = 'echo "Installing dependencies..."'
+lint = 'workspaced codebase lint'
+fmt = 'workspaced codebase format'
+test = 'echo "No tests configured"'
+codegen = 'echo "No codegen needed"'
+ci = { depends = ["lint", "test"] }
