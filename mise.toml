@@ -1,0 +1,52 @@
+[tools]
+"github:lucasew/workspaced" = "0.2.2"
+
+[tasks.lint]
+run = "workspaced codebase lint"
+
+[tasks.fmt]
+run = "workspaced codebase format"
+
+[tasks.test]
+depends = ["test:*"]
+
+[tasks."test:dummy"]
+run = "echo 'No tests defined'"
+
+[tasks.codegen]
+depends = ["codegen:*"]
+
+[tasks."codegen:dummy"]
+run = "echo 'No codegen defined'"
+
+[tasks.install]
+depends = ["install:*"]
+
+[tasks."install:dummy"]
+run = "echo 'No install defined'"
+
+[tasks.ci]
+depends = ["lint", "test"]
+
+[tasks."install:detect"]
+run = '''
+if [ -f "package-lock.json" ]; then
+  npm ci
+elif [ -f "yarn.lock" ]; then
+  yarn install --frozen-lockfile
+elif [ -f "pnpm-lock.yaml" ]; then
+  pnpm install --frozen-lockfile
+elif [ -f "bun.lockb" ]; then
+  bun install --frozen-lockfile
+elif [ -f "Cargo.lock" ]; then
+  cargo fetch
+elif [ -f "poetry.lock" ]; then
+  poetry install
+elif [ -f "requirements.txt" ]; then
+  pip install -r requirements.txt
+elif [ -f "go.mod" ]; then
+  go mod download
+else
+  echo "No package manager detected"
+fi
+'''
