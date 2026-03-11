@@ -1,0 +1,1 @@
+- 2026-03-11: [Medium] Swallowing background job errors with `wait -n` masks downstream failures; capture and check exit codes explicitly.

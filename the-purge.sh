@@ -1,3 +1,7 @@
+function reportError() {
+  echo "::error::$1" >&2
+}
+
 #doc: Docker
 
 {
@@ -187,4 +191,15 @@ stuffToDelete+=(
 sudo systemctl stop "${stuffToStop[@]}" &
 sudo rm -rf "${stuffToDelete[@]}" &
 
-while wait -n; do : ; done; # wait until it's possible to wait for bg job
+FAIL=0
+for job in $(jobs -p); do
+    wait "$job" || {
+        reportError "Background job $job failed in the-purge.sh"
+        FAIL=$((FAIL + 1))
+    }
+done
+
+if [ "$FAIL" -gt 0 ]; then
+    reportError "$FAIL background jobs failed during the purge."
+    exit 1
+fi
