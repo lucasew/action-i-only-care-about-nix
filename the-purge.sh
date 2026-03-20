@@ -1,12 +1,18 @@
-#doc: Docker
+#!/usr/bin/env bash
+#
+# the-purge.sh
+# Purges pre-installed software from the GitHub Actions runner to maximize disk space.
+# Uses background jobs (&) extensively to parallelize deletion for speed.
 
+#doc: Docker
+# Remove all docker images and prune system to free up space. Runs in the background.
 {
 docker image rm $(docker image ls --format '{{.ID}}')
 docker system prune --all --force
 } &
 
 #doc: Get rid of snap once and for all (~1GB)
-
+# Pin snapd to a very low priority to ensure it isn't accidentally reinstalled.
 sudo cat <<EOF | sudo tee /etc/apt/preferences.d/nosnap.pref
   Package: snapd
   Pin: release a=*
@@ -184,7 +190,9 @@ stuffToDelete+=(
 ~/.dotnet # (~50MB)
 )
 
+# Stop services and delete directories in parallel
 sudo systemctl stop "${stuffToStop[@]}" &
 sudo rm -rf "${stuffToDelete[@]}" &
 
+# Wait for all background jobs (docker prune, services stop, rm -rf) to finish before exiting
 while wait -n; do : ; done; # wait until it's possible to wait for bg job
