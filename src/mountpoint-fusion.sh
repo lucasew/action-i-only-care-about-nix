@@ -59,6 +59,6 @@ run sudo mount LABEL="${BTRFS_LABEL}" "${MOUNT_DIR}" -o "${BTRFS_MOUNT_OPTIONS}"
 
 for dir in /nix; do
   echo "Bind mounting $dir"
-  run sudo mkdir -p {"${MOUNT_DIR}",}"$dir"
+  run sudo mkdir -p "${MOUNT_DIR}$dir" "$dir"
   run sudo mount -o bind "${MOUNT_DIR}$dir" "$dir"
 done

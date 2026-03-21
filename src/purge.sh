@@ -9,7 +9,12 @@ trap 'report_error "An unexpected error occurred in purge.sh" "purge.sh" "$LINEN
 
 function remove_docker_images() {
   {
-    docker image rm $(docker image ls --format '{{.ID}}') || report_error "Failed to remove docker images"
+    local images
+    images=$(docker image ls --format '{{.ID}}')
+    if [ -n "$images" ]; then
+      # shellcheck disable=SC2086
+      docker image rm $images || report_error "Failed to remove docker images"
+    fi
     docker system prune --all --force || report_error "Failed to prune docker system"
   } &
 }
@@ -22,8 +27,8 @@ function remove_snap() {
   Pin-Priority: -10
 EOF
 
-  sudo systemctl stop snapd.service || report_error "Failed to stop snapd.service"
-  sudo umount --recursive /snap/*/* || report_error "Failed to unmount snap directories"
+  sudo systemctl stop snapd.service || true
+  sudo umount --recursive /snap/*/* || true
   sudo rm -rf ~/snap /snap /var/snap /var/lib/snapd /usr/lib/snapd || report_error "Failed to remove snap directories"
 }
 
@@ -35,7 +40,7 @@ function stop_services() {
     php8.1-fpm.service
   )
 
-  sudo systemctl stop "${stuffToStop[@]}" || report_error "Failed to stop services"
+  sudo systemctl stop "${stuffToStop[@]}" || true
 }
 
 function remove_files() {
