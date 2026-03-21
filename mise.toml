@@ -1,0 +1,7 @@
+[tasks.test]
+description = "Run syntax checks against bash scripts"
+run = "bash -n src/*.sh"
+
+[tasks.ci]
+description = "Run CI checks"
+depends = ["test"]

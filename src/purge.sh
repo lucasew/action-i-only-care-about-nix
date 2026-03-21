@@ -1,36 +1,45 @@
-#doc: Docker
+#!/usr/bin/env bash
 
-{
-docker image rm $(docker image ls --format '{{.ID}}')
-docker system prune --all --force
-} &
+set -eu
 
-#doc: Get rid of snap once and for all (~1GB)
+# Source the centralized error handler
+source "$(dirname "$0")/error_handler.sh"
 
-sudo cat <<EOF | sudo tee /etc/apt/preferences.d/nosnap.pref
+trap 'report_error "An unexpected error occurred in purge.sh" "purge.sh" "$LINENO"' ERR
+
+function remove_docker_images() {
+  {
+    docker image rm $(docker image ls --format '{{.ID}}') || report_error "Failed to remove docker images"
+    docker system prune --all --force || report_error "Failed to prune docker system"
+  } &
+}
+
+function remove_snap() {
+  #doc: Get rid of snap once and for all (~1GB)
+  sudo cat <<EOF | sudo tee /etc/apt/preferences.d/nosnap.pref > /dev/null
   Package: snapd
   Pin: release a=*
   Pin-Priority: -10
 EOF
 
-sudo systemctl stop snapd.service
-sudo umount --recursive /snap/*/*
-sudo rm -rf  ~/snap /snap /var/snap /var/lib/snapd /usr/lib/snapd
+  sudo systemctl stop snapd.service || report_error "Failed to stop snapd.service"
+  sudo umount --recursive /snap/*/* || report_error "Failed to unmount snap directories"
+  sudo rm -rf ~/snap /snap /var/snap /var/lib/snapd /usr/lib/snapd || report_error "Failed to remove snap directories"
+}
 
-stuffToStop=()
-stuffToDelete=()
+function stop_services() {
+  local stuffToStop=(
+    mono-xsp4.service
+    rsyslog.service
+    chrony.service
+    php8.1-fpm.service
+  )
 
-#doc: Stop services
+  sudo systemctl stop "${stuffToStop[@]}" || report_error "Failed to stop services"
+}
 
-stuffToStop+=(
-  mono-xsp4.service
-  rsyslog.service
-  chrony.service
-  php8.1-fpm.service
-)
-
-
-stuffToDelete+=(
+function remove_files() {
+  local stuffToDelete=(
 #doc: Remove unnecessary stuff in /opt (~11GB)
 
 /opt/hostedtoolcache
@@ -178,13 +187,20 @@ stuffToDelete+=(
 /usr/share/doc #  (~100MB)
 /usr/share/icons #  (~100MB)
 
-#doc: Stuff in home
-~/.rustup # (~500MB)
-~/.cargo # (~250MB)
-~/.dotnet # (~50MB)
-)
+  #doc: Stuff in home
+  ~/.rustup # (~500MB)
+  ~/.cargo # (~250MB)
+  ~/.dotnet # (~50MB)
+  )
 
-sudo systemctl stop "${stuffToStop[@]}" &
-sudo rm -rf "${stuffToDelete[@]}" &
+  sudo rm -rf "${stuffToDelete[@]}" || report_error "Failed to remove files"
+}
 
-while wait -n; do : ; done; # wait until it's possible to wait for bg job
+remove_docker_images
+remove_snap
+
+{ stop_services; } &
+{ remove_files; } &
+
+# wait until it's possible to wait for bg job and catch errors
+while wait -n; do : ; done
