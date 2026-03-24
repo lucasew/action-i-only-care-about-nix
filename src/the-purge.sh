@@ -1,36 +1,42 @@
-#doc: Docker
+#!/usr/bin/env bash
 
-{
-docker image rm $(docker image ls --format '{{.ID}}')
-docker system prune --all --force
-} &
+set -euo pipefail
+source "$(dirname "$0")/error_handler.sh"
 
-#doc: Get rid of snap once and for all (~1GB)
+function purge_docker() {
+  #doc: Docker
+  {
+  docker image rm $(docker image ls --format '{{.ID}}') || report_error "Failed to remove Docker images"
+  docker system prune --all --force || report_error "Failed to prune Docker system"
+  } &
+}
 
-sudo cat <<EOF | sudo tee /etc/apt/preferences.d/nosnap.pref
+function purge_snap() {
+  #doc: Get rid of snap once and for all (~1GB)
+  sudo cat <<EOF | sudo tee /etc/apt/preferences.d/nosnap.pref > /dev/null
   Package: snapd
   Pin: release a=*
   Pin-Priority: -10
 EOF
 
-sudo systemctl stop snapd.service
-sudo umount --recursive /snap/*/*
-sudo rm -rf  ~/snap /snap /var/snap /var/lib/snapd /usr/lib/snapd
+  sudo systemctl stop snapd.service || report_error "Failed to stop snapd"
+  sudo umount --recursive /snap/*/* || true
+  sudo rm -rf ~/snap /snap /var/snap /var/lib/snapd /usr/lib/snapd || report_error "Failed to remove snap files"
+}
 
-stuffToStop=()
-stuffToDelete=()
+function stop_services() {
+  local stuffToStop=(
+    mono-xsp4.service
+    rsyslog.service
+    chrony.service
+    php8.1-fpm.service
+  )
+  #doc: Stop services
+  sudo systemctl stop "${stuffToStop[@]}" &
+}
 
-#doc: Stop services
-
-stuffToStop+=(
-  mono-xsp4.service
-  rsyslog.service
-  chrony.service
-  php8.1-fpm.service
-)
-
-
-stuffToDelete+=(
+function remove_files() {
+  local stuffToDelete=(
 #doc: Remove unnecessary stuff in /opt (~11GB)
 
 /opt/hostedtoolcache
@@ -182,9 +188,13 @@ stuffToDelete+=(
 ~/.rustup # (~500MB)
 ~/.cargo # (~250MB)
 ~/.dotnet # (~50MB)
-)
+  )
+  sudo rm -rf "${stuffToDelete[@]}" &
+}
 
-sudo systemctl stop "${stuffToStop[@]}" &
-sudo rm -rf "${stuffToDelete[@]}" &
+purge_docker
+purge_snap
+stop_services
+remove_files
 
 while wait -n; do : ; done; # wait until it's possible to wait for bg job

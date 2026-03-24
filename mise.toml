@@ -1,0 +1,5 @@
+[tasks.test]
+run = "bash -n src/*.sh"
+
+[tasks.ci]
+run = "mise run test"

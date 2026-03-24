@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 
-set -eu
+set -euo pipefail
+source "$(dirname "$0")/error_handler.sh"
 
 # sudo dmesg -w &
 function run {
   echo "run:" "$@"
-  "$@"
+  "$@" || {
+    report_error "Command failed: $*"
+    return 1
+  }
 }
 
 root_free_space=$(df -m / | tail -n 1 | awk '{print $4}')
