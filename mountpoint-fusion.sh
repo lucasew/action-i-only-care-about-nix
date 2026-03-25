@@ -4,7 +4,7 @@ set -eu
 
 # sudo dmesg -w &
 function run {
-  echo "run:" "$@"
+  echo "run:" "$@" >&2
   "$@"
 }
 
@@ -15,13 +15,13 @@ echo "free space of /mnt: ${mnt_free_space}MB"
 
 loops=()
 if run sudo fallocate -l $((root_free_space - 1024))M /disk.img; then
-  run sudo losetup /dev/loop69 /disk.img
-  loops+=(/dev/loop69)
+  loop_dev=$(run sudo losetup -f --show /disk.img)
+  loops+=("$loop_dev")
 fi
 
 if run sudo fallocate -l $((mnt_free_space - 1024))M /mnt/disk.img; then
-  run sudo losetup /dev/loop420 /mnt/disk.img
-  loops+=(/dev/loop420)
+  loop_dev=$(run sudo losetup -f --show /mnt/disk.img)
+  loops+=("$loop_dev")
 fi
 
 

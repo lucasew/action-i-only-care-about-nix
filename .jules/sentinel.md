@@ -1,0 +1,2 @@
+- 2024-05-24: Ignored errors are retroactive violations.
+- 2026-03-25: Hardcoded loop devices (/dev/loopN) can cause resource collisions; always allocate dynamically with `losetup -f --show`.
