@@ -6,7 +6,12 @@ source "$(dirname "$0")/error_handler.sh"
 function purge_docker() {
   #doc: Docker
   {
-  docker image rm $(docker image ls --format '{{.ID}}') || report_error "Failed to remove Docker images"
+  local images
+  images=$(docker image ls --format '{{.ID}}')
+  if [ -n "$images" ]; then
+    # shellcheck disable=SC2086
+    docker image rm $images || report_error "Failed to remove Docker images"
+  fi
   docker system prune --all --force || report_error "Failed to prune Docker system"
   } &
 }
@@ -19,7 +24,7 @@ function purge_snap() {
   Pin-Priority: -10
 EOF
 
-  sudo systemctl stop snapd.service || report_error "Failed to stop snapd"
+  sudo systemctl stop snapd.service || true
   sudo umount --recursive /snap/*/* || true
   sudo rm -rf ~/snap /snap /var/snap /var/lib/snapd /usr/lib/snapd || report_error "Failed to remove snap files"
 }
@@ -32,7 +37,7 @@ function stop_services() {
     php8.1-fpm.service
   )
   #doc: Stop services
-  sudo systemctl stop "${stuffToStop[@]}" &
+  sudo systemctl stop "${stuffToStop[@]}" || true
 }
 
 function remove_files() {
@@ -189,12 +194,13 @@ function remove_files() {
 ~/.cargo # (~250MB)
 ~/.dotnet # (~50MB)
   )
-  sudo rm -rf "${stuffToDelete[@]}" &
+  sudo rm -rf "${stuffToDelete[@]}" || report_error "Failed to remove files"
 }
 
 purge_docker
 purge_snap
-stop_services
-remove_files
+
+{ stop_services; } &
+remove_files &
 
 while wait -n; do : ; done; # wait until it's possible to wait for bg job
