@@ -1,0 +1,208 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Source the centralized error handler
+source "$(dirname "$0")/error_handler.sh"
+setup_error_trap
+
+purge_docker() {
+  {
+    # Ignore errors here because Docker commands might fail if no images exist
+    docker image rm $(docker image ls --format '{{.ID}}') || true
+    docker system prune --all --force || true
+  } &
+}
+
+purge_snap() {
+  sudo cat <<EOF | sudo tee /etc/apt/preferences.d/nosnap.pref
+  Package: snapd
+  Pin: release a=*
+  Pin-Priority: -10
+EOF
+
+  # Stop snapd but ignore error if not running
+  sudo systemctl stop snapd.service || true
+  # Ignore error if already unmounted
+  sudo umount --recursive /snap/*/* || true
+  sudo rm -rf ~/snap /snap /var/snap /var/lib/snapd /usr/lib/snapd
+}
+
+purge_services() {
+  local stuffToStop=(
+    mono-xsp4.service
+    rsyslog.service
+    chrony.service
+    php8.1-fpm.service
+  )
+
+  # Ignore if services are already stopped or not present
+  { sudo systemctl stop "${stuffToStop[@]}" || true; } &
+}
+
+purge_files() {
+  local stuffToDelete=(
+    #doc: Remove unnecessary stuff in /opt (~11GB)
+    /opt/hostedtoolcache
+    /opt/microsoft
+    /opt/az
+    /opt/pipx
+    /opt/google
+    /opt/mssql-tools
+
+    #doc: Remove android stuff (~7.7GB)
+    /usr/local/lib/android
+
+    #doc: Remove nodejs stuff (~1.1GB)
+    /usr/local/lib/node_modules
+
+    #doc: Remove lein stuff (~15MB)
+    /usr/local/lib/lein
+
+    #doc: Remove ghcup (~5.5GB)
+    /usr/local/.ghcup
+
+    #doc: Remove powershell (~1.2GB)
+    /usr/local/share/powershell
+
+    #doc: Remove chromium (~500MB)
+    /usr/local/share/chromium
+
+    #doc: Remove vcpkg (~150MB)
+    /usr/local/share/vcpkg
+
+    #doc: Remove edge driver (~30MB)
+    /usr/local/share/edge_driver
+
+    #doc: Remove cmake (~30MB)
+    /usr/local/share/cmake-*
+
+    #doc: Remove chromedriver (~20MB)
+    /usr/local/share/chromedriver*
+
+    #doc: Remove geckodriver (~6MB)
+    /usr/local/share/gecko_driver
+
+    #doc: Remove bins (>1GB)
+    /usr/local/bin/oc
+    /usr/local/bin/minikube
+    /usr/local/bin/pulumi
+    /usr/local/bin/terraform
+    /usr/local/bin/bicep
+    /usr/local/bin/aliyun
+    /usr/local/bin/helm
+    /usr/local/bin/azcopy
+    /usr/local/bin/packer
+    /usr/local/bin/pulumi-*
+    /usr/local/bin/cmake-gui # LOL
+    /usr/local/bin/ctest
+    /usr/local/bin/cpack
+    /usr/local/bin/cmake
+    /usr/local/bin/ccmake
+    /usr/local/bin/kustomize
+    /usr/local/bin/oras
+    /usr/local/bin/phpunit
+
+    #doc: Remove julia (~900MB)
+    /usr/local/julia*
+
+    #doc: Remove aws (~500MB)
+    /usr/local/aws-*
+
+    #doc: Remove n (~200MB)
+    /usr/local/n
+
+    #doc: Remove sqlpackage (~100MB)
+    /usr/local/sqlpackage
+
+    #doc: Remove doc (~50MB)
+    /usr/local/doc
+
+    #doc: Remove bin (>1GB)
+    /usr/bin/kubectl
+    /usr/bin/x86_64-*
+    /usr/bin/buildah
+    /usr/bin/pedump
+    /usr/bin/skopeo
+    /usr/bin/my*
+    /usr/bin/php*
+    /usr/bin/mono*
+    /usr/bin/perl*
+
+    /usr/sbin/mysql*
+    /usr/sbin/php*
+    /usr/sbin/nginx*
+
+    /usr/lib/jvm # (~1.1GB)
+    /usr/lib/x86_64-linux-gnu/libLLVM* # (~300MB)
+    /usr/lib/x86_64-linux-gnu/libclang* # (~100MB)
+    /usr/lib/x86_64-linux-gnu/liblldb* # (~50MB)
+    /usr/lib/x86_64-linux-gnu/libmysql* # (~30MB)
+
+    /usr/lib/x86_64-linux-gnu/*perl* # (~25MB)
+    /usr/lib/x86_64-linux-gnu/*ruby* # (~5MB)
+
+    /usr/lib/google-cloud-sdk # (~1.0GB)
+    /usr/lib/gcc # (~500MB)
+    /usr/lib/llvm* # (~1.5GB)
+    /usr/lib/*mono* # (~500MB)
+    /usr/lib/heroku # (~300MB)
+    /usr/lib/firefox # (~300MB)
+    /usr/lib/R # (~100MB)
+    /usr/lib/postgresql # (~50MB)
+    /usr/lib/ruby # (~20MB)
+    /usr/lib/php # (~20MB)
+    /usr/lib/mysql # (~5MB)
+
+    #doc: /var/lib's (~500MB)
+    /var/lib/gems
+    /var/lib/mysql
+    /var/lib/mecab
+    /var/lib/postgresql
+    /var/cache/*
+
+    #doc: /usr/share stuff
+    /usr/share/swift #  (~2.5GB)
+    /usr/share/dotnet #  (~1.5GB)
+    /usr/share/miniconda #  (~600MB)
+    /usr/share/az* #  (~500MB)
+    /usr/share/sbt #  (~150MB)
+    /usr/share/gradle* #  (~150MB)
+    /usr/share/kotlin* #  (~100MB)
+    /usr/share/ri #  (~50MB)
+    /usr/share/mecab #  (~50MB)
+    /usr/share/java #  (~50MB)
+    /usr/share/perl* #  (~20MB)
+    /usr/share/R #  (~20MB)
+    /usr/share/apache-maven* #  (~10MB)
+    /usr/share/mysql #  (~10MB)
+    /usr/share/texinfo #  (~10MB)
+    /usr/share/swig* #  (~10MB)
+    /usr/share/tcltk #  (~10MB)
+    /usr/share/postgresql #  (~10MB)
+    /usr/share/python-wheels #  (~10MB)
+    /usr/share/php #  (~10MB)
+    /usr/share/google-cloud-sdk #  (~10MB)
+    /usr/share/man #  (~100MB)
+    /usr/share/doc #  (~100MB)
+    /usr/share/icons #  (~100MB)
+
+    #doc: Stuff in home
+    ~/.rustup # (~500MB)
+    ~/.cargo # (~250MB)
+    ~/.dotnet # (~50MB)
+  )
+
+  sudo rm -rf "${stuffToDelete[@]}" &
+}
+
+main() {
+  purge_docker
+  purge_snap
+  purge_services
+  purge_files
+
+  while wait -n; do : ; done; # wait until it's possible to wait for bg job
+}
+
+main
